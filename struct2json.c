@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stddef.h>
 #include <stdbool.h>
 #include <string.h>
 
@@ -28,16 +29,18 @@ typedef int (*tostring)(const char *name, void *vaule, size_t len,
                            char *buffer, size_t size);
 
 
+// the type is for middle convert convenience, for middle struct use
 typedef enum
 {
     INT_FIELD = 1,  // struct field is int
-    FLOAT_FIELD,    // struct field is float
+    DOUBLE_FIELD,    // struct field is double
     STRING_FIELD,   // struct field is string pointer
     BOOL_FIELD,     // struct field is bool
     CHAR_ARRAY_FIELD,
     INT_ARRAY_FIELD,
     DOUBLE_ARRAY_FIELD,
     // above is standard field
+    // custom field type need to define custom tostring
     CUSTOM_FIELD1,
     CUSTOM_FIELD2,
     CUSTOM_FIELD3,
@@ -57,12 +60,12 @@ typedef struct rule
 
 
 /** @brief convert one int value to one name-value of json  
- *  @param name, json name
+ *  @param name, json item name
  *  @param value, point to one struct data field
- *  @param len, the length of value data size
- *  @param buffer, string format is like "total": 56  
+ *  @param len, the length of value data(bytes)
+ *  @param buffer, buffer to store string format is like "total": 56  
  *  @param size, the size of buffer
- *  @return 0 or -1
+ *  @return
  * - 0 success
  * - -1 fail
  **/
@@ -92,6 +95,19 @@ int str2str(const char *name, void *value, size_t len, char *buffer, size_t size
 {
     int n = 0;
     n = snprintf(buffer, size, "\"%s\":\"%s\"", name, (char *)value);
+    if(n > 0 && n < size)
+        return 0;
+    else
+        return -1;
+}
+
+
+// convert double to string
+int double2str(const char *name, void *value, size_t len, char *buffer, size_t size)
+{
+    int n = 0;
+    
+    n = snprintf(buffer, size, "\"%s\":%f", name, *(double *)value);
     if(n > 0 && n < size)
         return 0;
     else
@@ -214,6 +230,11 @@ int conv_rule_to_string(rule_t *rule, char *buffer, size_t size)
             ret = int2str(rule->name, rule->value, rule->v_len, buffer, size);
             break;
         }
+        case DOUBLE_FIELD:
+        {
+            ret = double2str(rule->name, rule->value, rule->v_len, buffer, size);
+            break;
+        }
         case STRING_FIELD:
         {
             ret = str2str(rule->name, rule->value, rule->v_len, buffer, size);
@@ -250,7 +271,7 @@ int conv_rule_to_string(rule_t *rule, char *buffer, size_t size)
 
 
 
-// the popose is to get a plat json string with simple format like {"name": value}
+// the purpose is to get a plat json string with simple format like {"name": value}
 int get_json_string(rule_t field[], size_t size, char *buffer, size_t buf_size)
 {
     int ret = 0;
@@ -295,17 +316,20 @@ int get_json_string(rule_t field[], size_t size, char *buffer, size_t buf_size)
         
         if(i != size - 1)
         {
-            *(buffer+total) = ',';
+            *(buffer+total) = ',';   // a comma followed an item
             total++;
         }
         
     }
 
-    *(buffer + total) = '}';  // add the ending braket
+    *(buffer + total) = '}';  // add the ending bracket
 
     return 0;
 }
 
+
+
+ 
 // in convert function you may use cjson function to do it
 int main()
 {
@@ -316,6 +340,7 @@ int main()
         int f2;
         char *name;
         int list[10];
+        double sum;    // dont use float precision is not good
         bool can_say_espanol;  // bool value
     };
 
@@ -326,6 +351,7 @@ int main()
     t.can_say_espanol = false;
     t.list[0] = 100;
     t.list[3] = 60;
+    t.sum = 1024.99;
     
     // step 1 create rules for each struct field
     // how to get struct meta info
@@ -337,6 +363,7 @@ int main()
         {.name = "name", .type = STRING_FIELD, .value = t.name, .v_len = strlen(t.name)},
         {.name = "list", .type = INT_ARRAY_FIELD, .value = t.list, .v_len = sizeof(t.list)},
         {.name = "can_espanol", .type = BOOL_FIELD, .value = &t.can_say_espanol},
+        {.name = "sum", .type = DOUBLE_FIELD, .value = &t.sum},
     };
 
     
